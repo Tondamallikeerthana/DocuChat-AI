@@ -1,0 +1,83 @@
+{% extends 'forum/base.html' %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 40px auto; padding: 0 20px;">
+    <!-- <h2 style="margin-bottom: 20px;">All Courses</h2> -->
+
+    <div style="display: flex; justify-content: space-between; 
+                align-items: center; margin-bottom: 20px;">
+        <h2>All Courses</h2>
+        <button onclick="toggleCourseForm()"
+                style="background: #2c3e50; color: white; border: none;
+                    padding: 10px 18px; border-radius: 6px; cursor: pointer;">
+            + New Course
+        </button>
+    </div>
+
+    <!-- New Course Form -->
+    <div id="new-course-form" style="display: none; background: white;
+            padding: 20px; border-radius: 8px; margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        <h3 style="margin-bottom: 15px;">Create New Course</h3>
+        <input type="text" id="course-name" placeholder="Course Name"
+            style="width: 100%; padding: 10px; margin-bottom: 10px;
+                    border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+        <textarea id="course-description" placeholder="Description"
+                style="width: 100%; padding: 10px; margin-bottom: 10px;
+                        border: 1px solid #ddd; border-radius: 6px;
+                        font-size: 14px; height: 80px; resize: vertical;">
+        </textarea>
+        <button onclick="createCourse()"
+                style="background: #27ae60; color: white; border: none;
+                    padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+            Create Course
+        </button>
+        <button onclick="toggleCourseForm()"
+                style="background: #95a5a6; color: white; border: none;
+                    padding: 10px 20px; border-radius: 6px;
+                    cursor: pointer; margin-left: 10px;">
+            Cancel
+        </button>
+    </div>
+
+    {% for course in courses %}
+    <a href="/course/{{ course.id }}/forum/" style="text-decoration: none;">
+        <div style="background: white; padding: 20px; margin-bottom: 15px;
+                    border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    cursor: pointer; transition: box-shadow 0.2s;"
+             onmouseover="this.style.boxShadow='0 4px 8px rgba(0,0,0,0.2)'"
+             onmouseout="this.style.boxShadow='0 2px 4px rgba(0,0,0,0.1)'">
+            <h3 style="color: #2c3e50;">{{ course.name }}</h3>
+            <p style="color: #666; margin-top: 8px;">{{ course.description }}</p>
+        </div>
+    </a>
+    {% empty %}
+    <p>No courses available yet.</p>
+    {% endfor %}
+</div>
+
+<script>
+    function toggleCourseForm() {
+        const form = document.getElementById('new-course-form');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function createCourse() {
+        const name = document.getElementById('course-name').value.trim();
+        const description = document.getElementById('course-description').value.trim();
+        if (!name) return;
+
+        fetch('/api/courses/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description })
+        })
+        .then(res => res.json())
+        .then(course => {
+            // Redirect directly to the new course forum
+            window.location.href = `/course/${course.id}/forum/`;
+        })
+        .catch(err => console.error('Error creating course:', err));
+    }
+</script>
+{% endblock %}

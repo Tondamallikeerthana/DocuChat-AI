@@ -1,0 +1,346 @@
+{% extends 'forum/base.html' %}
+
+{% block content %}
+<div style="display: flex; height: calc(100vh - 55px);">
+
+    <!-- Left Panel: Topics -->
+    <div style="width: 250px; background: #2c3e50; color: white;
+                padding: 20px; overflow-y: auto; flex-shrink: 0;">
+        <h3 style="margin-bottom: 15px; font-size: 14px;
+                   text-transform: uppercase; opacity: 0.7;">
+            {{ course.name }}
+        </h3>
+
+        <!-- Topics from DB -->
+        {% for topic in topics %}
+        <div class="topic-item" onclick="loadThreads({{ topic.id }}, this)"
+             style="padding: 10px; border-radius: 6px;
+                    cursor: pointer; margin-bottom: 5px;">
+            {{ topic.name }}
+        </div>
+        {% endfor %}
+
+        <!-- Add Topic Button -->
+        <div style="margin-top: 15px; border-top: 1px solid #3d5166; padding-top: 15px;">
+            <button onclick="toggleTopicForm()"
+                    style="width: 100%; background: #3d5166; color: white;
+                        border: none; padding: 10px; border-radius: 6px;
+                        cursor: pointer; font-size: 13px;">
+                + Add Topic
+            </button>
+
+            <!-- Add Topic Form -->
+            <div id="new-topic-form" style="display: none; margin-top: 10px;">
+                <input type="text" id="topic-name" placeholder="Topic name"
+                    style="width: 100%; padding: 8px; margin-bottom: 8px;
+                            border: 1px solid #ddd; border-radius: 6px;
+                            font-size: 13px; box-sizing: border-box;">
+                <textarea id="topic-description" placeholder="Description (optional)"
+                        style="width: 100%; padding: 8px; margin-bottom: 8px;
+                                border: 1px solid #ddd; border-radius: 6px;
+                                font-size: 13px; height: 60px; resize: vertical;
+                                box-sizing: border-box;">
+                </textarea>
+                <button onclick="createTopic()"
+                        style="width: 100%; background: #27ae60; color: white;
+                            border: none; padding: 8px; border-radius: 6px;
+                            cursor: pointer; font-size: 13px;">
+                    Add
+                </button>
+                <button onclick="toggleTopicForm()"
+                        style="width: 100%; background: transparent; color: #aaa;
+                            border: none; padding: 6px; cursor: pointer;
+                            font-size: 12px; margin-top: 4px;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel: Threads -->
+    <div style="flex: 1; padding: 25px; overflow-y: auto;">
+
+        <!-- Header -->
+        <div style="display: flex; justify-content: space-between;
+                    align-items: center; margin-bottom: 20px;">
+            <h2 id="panel-title">Select a topic</h2>
+            <button onclick="toggleNewThreadForm()"
+                    style="background: #2c3e50; color: white; border: none;
+                           padding: 10px 18px; border-radius: 6px;
+                           cursor: pointer; display: none;"
+                    id="new-thread-btn">
+                + New Thread
+            </button>
+        </div>
+
+        <!-- New Thread Form (hidden by default) -->
+        <div id="new-thread-form" style="display: none; background: white;
+                padding: 20px; border-radius: 8px; margin-bottom: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h3 style="margin-bottom: 15px;">Create New Thread</h3>
+            <input type="text" id="thread-title" placeholder="Title"
+                   style="width: 100%; padding: 10px; margin-bottom: 10px;
+                          border: 1px solid #ddd; border-radius: 6px;
+                          font-size: 14px;">
+            <div id="thread-description"
+                contenteditable="true"
+                oninput="highlightAI(this)"
+                data-placeholder="Description (use @AI to get an AI response)"
+                style="width: 100%; padding: 10px; margin-bottom: 10px;
+                        min-height: 80px; border: 1px solid #ddd; border-radius: 6px;
+                        font-size: 14px; outline: none; background: white;
+                        word-break: break-word; color: #333;">
+            </div>
+            <button onclick="createThread()"
+                    style="background: #27ae60; color: white; border: none;
+                           padding: 10px 20px; border-radius: 6px; cursor: pointer;">
+                Post Thread
+            </button>
+            <button onclick="toggleNewThreadForm()"
+                    style="background: #95a5a6; color: white; border: none;
+                           padding: 10px 20px; border-radius: 6px;
+                           cursor: pointer; margin-left: 10px;">
+                Cancel
+            </button>
+        </div>
+
+        <!-- Threads List -->
+        <div id="threads-container">
+            <p style="color: #999;">Click a topic on the left to see threads.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Track currently selected topic
+    let currentTopicId = null;
+    let currentTopicEl = null;
+
+    function highlightAI(el) {
+        // Save cursor position before modifying HTML
+        const sel = window.getSelection();
+        const offset = sel.rangeCount ? sel.getRangeAt(0).startOffset : 0;
+        const node = sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+
+        // Get plain text and replace @AI with colored span
+        const text = el.innerText;
+        el.innerHTML = text.replace(/@AI\b/gi,
+            '<span style="color: #3498db; font-weight: bold;">@AI</span>'
+        );
+
+        // Restore cursor to end of content
+        const range = document.createRange();
+        const newSel = window.getSelection();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        newSel.removeAllRanges();
+        newSel.addRange(range);
+    }
+
+    function highlightAIText(text) {
+        return text.replace(/@AI\b/gi,
+            '<span style="color: #3498db; font-weight: bold;">@AI</span>'
+        );
+    }
+
+    // Highlight selected topic in left panel
+    function setActiveTopicItem(el) {
+        document.querySelectorAll('.topic-item').forEach(item => {
+            item.style.background = 'transparent';
+        });
+        el.style.background = '#3d5166';
+    }
+
+    // Load threads for a topic from the API
+    function loadThreads(topicId, el) {
+        currentTopicId = topicId;
+        currentTopicEl = el;
+        setActiveTopicItem(el);
+
+        // Update panel title
+        document.getElementById('panel-title').innerText = el.innerText.trim();
+        document.getElementById('new-thread-btn').style.display = 'block';
+        document.getElementById('new-thread-form').style.display = 'none';
+
+        // Build API URL
+        let url = '/api/threads/';
+        if (topicId) {
+            url += `?topic=${topicId}`;
+        } else {
+            url += '?general=true';
+        }
+
+        fetch(url)
+            .then(res => res.json())
+            .then(threads => renderThreads(threads))
+            .catch(err => console.error('Error loading threads:', err));
+    }
+
+    // Render threads into the right panel
+    function renderThreads(threads) {
+        const container = document.getElementById('threads-container');
+        if (threads.length === 0) {
+            container.innerHTML = '<p style="color:#999;">No threads yet. Be the first to post!</p>';
+            return;
+        }
+        container.innerHTML = threads.map(thread => `
+            <div style="background: white; padding: 20px; margin-bottom: 15px;
+                        border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h3 style="color: #2c3e50;">${highlightAIText(thread.title)}</h3>
+                <p style="color: #666; margin-top: 6px;">${highlightAIText(thread.description || '')}</p>
+                <div style="margin-top: 10px; font-size: 12px; color: #999;">
+                    By ${thread.created_by_name} · ${new Date(thread.created_at).toLocaleString()}
+                </div>
+                <button onclick="toggleReplies(${thread.id}, this)"
+                        style="margin-top: 12px; background: none;
+                               border: 1px solid #2c3e50; color: #2c3e50;
+                               padding: 6px 14px; border-radius: 6px;
+                               cursor: pointer; font-size: 13px;">
+                    Replies
+                </button>
+                <div id="replies-${thread.id}" style="display: none; margin-top: 15px;">
+                    <div id="replies-list-${thread.id}"></div>
+                    <div style="margin-top: 10px;">
+                        <div id="reply-input-${thread.id}"
+                            contenteditable="true"
+                            oninput="highlightAI(this)"
+                            style="width: 100%; padding: 10px; margin-bottom: 10px;
+                                    min-height: 80px; border: 1px solid #ddd; border-radius: 6px;
+                                    font-size: 14px; outline: none; background: white;
+                                    word-break: break-word; color: #333;">
+                        </div>
+                        <button onclick="submitReply(${thread.id})"
+                                style="margin-top: 8px; background: #2c3e50;
+                                       color: white; border: none; padding: 8px 16px;
+                                       border-radius: 6px; cursor: pointer;">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Toggle reply section open/close
+    function toggleReplies(threadId, btn) {
+        const repliesDiv = document.getElementById(`replies-${threadId}`);
+        if (repliesDiv.style.display === 'none') {
+            repliesDiv.style.display = 'block';
+            loadReplies(threadId);
+            btn.innerText = 'Hide Replies';
+        } else {
+            repliesDiv.style.display = 'none';
+            btn.innerText = 'Replies';
+        }
+    }
+
+    // Load replies for a thread
+    function loadReplies(threadId) {
+        fetch(`/api/threads/${threadId}/replies/`)
+            .then(res => res.json())
+            .then(replies => renderReplies(threadId, replies))
+            .catch(err => console.error('Error loading replies:', err));
+    }
+
+    // Render replies
+    function renderReplies(threadId, replies) {
+        const container = document.getElementById(`replies-list-${threadId}`);
+        if (replies.length === 0) {
+            container.innerHTML = '<p style="color:#999; font-size:13px;">No replies yet.</p>';
+            return;
+        }
+        container.innerHTML = replies.map(reply => `
+            <div style="padding: 12px; margin-bottom: 10px; border-radius: 6px;
+                        background: ${reply.is_ai_response ? '#eaf4fb' : '#f9f9f9'};
+                        border-left: 4px solid ${reply.is_ai_response ? '#3498db' : '#ddd'};">
+                <div style="font-size: 12px; font-weight: bold; margin-bottom: 6px;
+                            color: ${reply.is_ai_response ? '#3498db' : '#555'};">
+                    ${reply.is_ai_response ? 'AI Assistant' : reply.author_name}
+                </div>
+                <div style="font-size: 14px;">${highlightAIText(reply.content)}</div>
+            </div>
+        `).join('');
+    }
+
+    // Submit a new reply
+    function submitReply(threadId) {
+        const input = document.getElementById(`reply-input-${threadId}`);
+        const content = input.innerText.trim();
+        if (!content) return;
+
+        fetch(`/api/threads/${threadId}/replies/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: content })
+        })
+        .then(res => res.json())
+        .then(() => {
+            input.innerHTML = '';
+            setTimeout(() => loadReplies(threadId), 3000);
+        })
+        .catch(err => console.error('Error posting reply:', err));
+    }
+
+    // Toggle new thread form
+    function toggleNewThreadForm() {
+        const form = document.getElementById('new-thread-form');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Create a new thread
+    function createThread() {
+        const title = document.getElementById('thread-title').value.trim();
+        const description = document.getElementById('thread-description').innerText.trim();
+        if (!title) return;
+
+        const body = { 
+            title, 
+            description,
+            topic: currentTopicId 
+        };
+
+        fetch('/api/threads/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        })
+        .then(res => res.json())
+        .then(() => {
+            document.getElementById('thread-title').value = '';
+            document.getElementById('thread-description').innerHTML = '';
+            document.getElementById('new-thread-form').style.display = 'none';
+            setTimeout(() => {
+                loadThreads(currentTopicId, currentTopicEl);
+            }, 3000);
+        })
+        .catch(err => console.error('Error creating thread:', err));
+    }
+
+    function toggleTopicForm() {
+        const form = document.getElementById('new-topic-form');
+        form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function createTopic() {
+        const name = document.getElementById('topic-name').value.trim();
+        const description = document.getElementById('topic-description').value.trim();
+        if (!name) return;
+
+        fetch('/api/topics/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                name, 
+                description,
+                course: {{ course.id }}   // pass current course id
+            })
+        })
+        .then(res => res.json())
+        .then(() => {
+            // Reload the page so new topic appears in left panel
+            window.location.reload();
+        })
+        .catch(err => console.error('Error creating topic:', err));
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends 'forum/base.html' %}
+{% block content %}
+<div style="max-width:700px;margin:40px auto;padding:0 20px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h2>Your Chats</h2>
+    <a href="{% url 'mode-select' %}" style="background:#2c3e50;color:white;padding:10px 18px;border-radius:6px;text-decoration:none;">
+      + New Chat
+    </a>
+  </div>
+  {% for s in sessions %}
+    <a href="{% url 'chat-session' s.id %}" style="text-decoration:none;">
+      <div style="background:white;padding:15px 20px;margin-bottom:10px;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <strong style="color:#2c3e50;">{{ s.title|default:"Untitled chat" }}</strong>
+        <span style="color:#999;font-size:12px;margin-left:8px;">{{ s.get_source_type_display }} · {{ s.created_at|date:"M d, H:i" }}</span>
+      </div>
+    </a>
+  {% empty %}
+    <p style="color:#999;">No chats yet. Start one above.</p>
+  {% endfor %}
+</div>
+{% endblock %}

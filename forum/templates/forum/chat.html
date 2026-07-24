@@ -1,0 +1,88 @@
+{% extends 'forum/base.html' %}
+{% block content %}
+<style>
+  .chat-wrap { max-width:800px; margin:0 auto; height:calc(100vh - 55px); display:flex; flex-direction:column; }
+  .chat-header { padding:15px 20px; border-bottom:1px solid #ddd; background:white; }
+  .chat-header a { float:right; color:#2c3e50; }
+  #messages { flex:1; overflow-y:auto; padding:20px; background:#f5f5f5; }
+  .msg-row { margin-bottom:12px; display:flex; }
+  .msg-row.user { justify-content:flex-end; }
+  .msg-row.ai { justify-content:flex-start; }
+  .msg-bubble { max-width:70%; padding:10px 14px; border-radius:10px; box-shadow:0 1px 2px rgba(0,0,0,0.1); }
+  .msg-bubble.user { background:#2c3e50; color:white; }
+  .msg-bubble.ai { background:white; color:#333; }
+  .chat-input-row { padding:15px; background:white; border-top:1px solid #ddd; display:flex; gap:10px; }
+  #chat-input { flex:1; padding:12px; border:1px solid #ddd; border-radius:6px; }
+  .send-btn { background:#2c3e50; color:white; border:none; padding:12px 20px; border-radius:6px; cursor:pointer; }
+</style>
+
+<div class="chat-wrap" id="chat-wrap" data-session-id="{{ session.id }}">
+  <div class="chat-header">
+    <strong>{{ session.title|default:"Untitled chat" }}</strong>
+    <span style="color:#999;font-size:12px;margin-left:8px;">{{ session.get_source_type_display }}</span>
+    <a href="{% url 'mode-select' %}">+ New Chat</a>
+  </div>
+
+  <div id="messages">
+    {% for m in messages %}
+      <div class="msg-row {{ m.role }}">
+        <div class="msg-bubble {{ m.role }}">{{ m.content }}</div>
+      </div>
+    {% endfor %}
+    {% if not messages %}
+      <p style="color:#999;text-align:center;margin-top:40px;">Ask a question below to get started.</p>
+    {% endif %}
+  </div>
+
+  <div class="chat-input-row">
+    <input type="text" id="chat-input" placeholder="Ask a question..." autofocus
+           onkeydown="if(event.key==='Enter') sendMessage();">
+    <button class="send-btn" onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<script>
+const sessionId = document.getElementById('chat-wrap').dataset.sessionId;
+
+function getCookie(name) {
+    const match = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return match ? match.pop() : '';
+}
+
+function appendMessage(role, content) {
+    const box = document.getElementById('messages');
+    const empty = box.querySelector('p');
+    if (empty) empty.remove();
+    const row = document.createElement('div');
+    row.className = `msg-row ${role}`;
+    const bubble = document.createElement('div');
+    bubble.className = `msg-bubble ${role}`;
+    bubble.textContent = content;
+    row.appendChild(bubble);
+    box.appendChild(row);
+    box.scrollTop = box.scrollHeight;
+}
+
+function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const content = input.value.trim();
+    if (!content) return;
+    appendMessage('user', content);
+    input.value = '';
+
+    fetch(`/chat/${sessionId}/send/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: `content=${encodeURIComponent(content)}`
+    })
+    .then(res => res.json())
+    .then(data => appendMessage('ai', data.answer || data.error))
+    .catch(() => appendMessage('ai', 'Something went wrong. Please try again.'));
+}
+
+document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+</script>
+{% endblock %}
